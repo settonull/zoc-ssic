@@ -7,7 +7,7 @@ class BasicClassifier(nn.Module):
 
     """Class classifier head for MCB style models."""
 
-    def __init__(self, n_classes=3000, dropout=0.2):
+    def __init__(self, n_classes=1000, dropout=0.2):
         """Initialize SkipGramDistNet."""
         super(BasicClassifier, self).__init__()
         self.n_classes = n_classes

@@ -45,8 +45,7 @@ if __name__ == '__main__':
     Usage:
         python train_classifier.py \
             --model_type basic
-            --train_data_path train_data \
-            --val_data_path val_data \
+            --data_path /scratch/zh1115/dsga1008/ssl_data_96 \
             --save_dir saved_models
     """
 

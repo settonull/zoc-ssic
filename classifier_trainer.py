@@ -1,14 +1,12 @@
 
 import os
-#import csv
+import csv
 import random
 
 import numpy as np
 from tqdm import tqdm
 
 import torch
-from torch.utils.data import Subset
-from torch.utils.data import DataLoader
 from torch.optim import Adam
 
 from basic_classifier import BasicClassifier
@@ -21,16 +19,11 @@ class ClassifierTrainer():
                  learning_rate=3e-5, num_epochs=100, weight_decay=0,
                  patience=10, min_lr=0):
         """
-        Initialize BertMBC model.
+        Initialize Classifier trainer.
 
         Args
         ----
-            model_type : string, model name, 'mc-bert'.
-            vis_feat_dim : int, intermediate visual feature dimension.
-            spatial_size : int, spatial size of visual features.
-            lm_hidden_dim : int, size of hidden state in language model.
-            cmb_feat_dim : int, combined feature dimension.
-            kernel_size : int, kernel_size to use in attention.
+            model_type : string, model name, 'basic'.
             batch_size : int, batch size for optimization.
             num_epochs : int, number of epochs to train for.
 
@@ -78,13 +71,12 @@ class ClassifierTrainer():
             self.model = self.model.cuda()
 
         # reproducability and deteriministic continuation of models
-        np.random.seed(1234)
-        torch.manual_seed(1234)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-
-        self.torch_rng_state = torch.get_rng_state()
-        self.numpy_rng_state = np.random.get_state()
+        #np.random.seed(1234)
+        #torch.manual_seed(1234)
+        #torch.backends.cudnn.deterministic = True
+        #torch.backends.cudnn.benchmark = False
+        #self.torch_rng_state = torch.get_rng_state()
+        #self.numpy_rng_state = np.random.get_state()
 
     def _train_epoch(self, loader):
         """Train epoch."""
@@ -205,7 +197,7 @@ class ClassifierTrainer():
                N Classes: {}\n\
                Save Dir: {}".format(
                    self.model_type, self.weight_decay, self.learning_rate,
-                   self.patience, self.min_lr, self.batch_size, train_chunks, eval_pct,
+                   self.patience, self.min_lr, self.batch_size,
                    self.n_classes, save_dir), flush=True)
 
         self.save_dir = save_dir
