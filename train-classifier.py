@@ -7,9 +7,10 @@ from classifier_trainer import ClassifierTrainer
 import torchvision.transforms as transforms
 from torchvision import datasets
 import torch
+import numpy as np
+from torch.utils.data import Subset
 
-
-def image_loader(path, batch_size):
+def image_loader(path, batch_size, eval_pct=0.01):
     transform = transforms.Compose(
         [
             transforms.ToTensor()
@@ -19,6 +20,14 @@ def image_loader(path, batch_size):
     sup_val_data = datasets.ImageFolder('{}/{}/val'.format(path, 'supervised'), transform=transform)
     unsup_data = datasets.ImageFolder('{}/{}/'.format(path, 'unsupervised'), transform=transform)
 
+
+    #just evaluate some of val
+    indexes = [x for x in range(len(sup_val_data))]
+    np.random.shuffle(indexes)
+    amt = int(np.ceil(len(indexes) * eval_pct))
+    subset_sup_val_data = Subset(sup_val_data, indexes[:amt])
+
+
     data_loader_sup_train = torch.utils.data.DataLoader(
         sup_train_data,
         batch_size=batch_size,
@@ -26,7 +35,7 @@ def image_loader(path, batch_size):
         num_workers=8
     )
     data_loader_sup_val = torch.utils.data.DataLoader(
-        sup_val_data,
+        subset_sup_val_data, 
         batch_size=batch_size,
         shuffle=True,
         num_workers=8

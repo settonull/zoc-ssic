@@ -55,7 +55,7 @@ class ClassifierTrainer():
     def _init_nn(self):
         """Initialize the nn model for training."""
         if self.model_type == 'basic':
-            mode = BasicClassifier(self.n_classes)
+            self.model = BasicClassifier(self.n_classes)
         else:
             raise ValueError("Did not recognize model type!")
 
@@ -97,7 +97,6 @@ class ClassifierTrainer():
             #could be smaller due to end of loader
             batch_size = labels.size(0)
 
-
             if self.USE_CUDA:
                 images = images.cuda()
                 labels = labels.cuda()
@@ -105,9 +104,8 @@ class ClassifierTrainer():
             # forward pass
             self.model.zero_grad()
             #let's calculate loss and accuracy out here
-            logits = self.model(images)
+            probs = self.model(images)
 
-            probs = torch.nn.functional.log_softmax(logits, dim=1)
             loss = loss_fct(probs, labels)
 
             # backward pass
@@ -141,7 +139,7 @@ class ClassifierTrainer():
                 # batch_size x RGB x height X width
                 images = batch_samples[0]
                 # batch_size
-                labels = batch_samples['labels']
+                labels = batch_samples[1]
 
                 batch_size = images.size(0)
 
