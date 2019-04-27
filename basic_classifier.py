@@ -2,6 +2,7 @@
 
 from torch import nn
 
+from torchvision import models
 
 class BasicClassifier(nn.Module):
 
@@ -12,17 +13,18 @@ class BasicClassifier(nn.Module):
         super(BasicClassifier, self).__init__()
         self.n_classes = n_classes
 
-        self.drop = nn.Dropout(p=dropout)
-        self.cls = nn.Linear(self.mcb_model.output_dim, self.n_classes)
+        self.main = models.resnet50(pretrained=False)
+
+        self.main.fc = nn.Sequential(nn.Linear(2048, 512),
+                                 nn.ReLU(),
+                                 nn.Dropout(dropout),
+                                 nn.Linear(512, n_classes),
+                                 nn.LogSoftmax(dim=1))
 
     def forward(self, img):
         """Forward Pass."""
 
         #do the work on the image
-        out = img
+        x = self.main(img)
 
-        pooled_output = self.drop(out)
-        # logits: [batch_size, n_classes]
-        logits = self.cls(pooled_output)
-
-        return logits
+        return x
