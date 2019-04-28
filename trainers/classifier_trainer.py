@@ -1,7 +1,5 @@
 
 import os
-import csv
-import random
 
 import numpy as np
 from tqdm import tqdm
@@ -9,7 +7,7 @@ from tqdm import tqdm
 import torch
 from torch.optim import Adam
 
-from basic_classifier import BasicClassifier
+from models.basic_classifier import BasicClassifier
 
 class ClassifierTrainer():
 

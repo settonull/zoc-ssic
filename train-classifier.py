@@ -2,7 +2,7 @@
 
 from argparse import ArgumentParser
 
-from classifier_trainer import ClassifierTrainer
+from trainers.classifier_trainer import ClassifierTrainer
 
 import torchvision.transforms as transforms
 from torchvision import datasets
@@ -16,10 +16,15 @@ def image_loader(path, batch_size, eval_pct=0.01):
             transforms.ToTensor()
         ]
     )
+
+    print("Loading datasets...", flush=True, end='')
     sup_train_data = datasets.ImageFolder('{}/{}/train'.format(path, 'supervised'), transform=transform)
     sup_val_data = datasets.ImageFolder('{}/{}/val'.format(path, 'supervised'), transform=transform)
     unsup_data = datasets.ImageFolder('{}/{}/'.format(path, 'unsupervised'), transform=transform)
 
+    print("done.", flush=True)
+
+    print("Creating dataloaders...", flush=True, end='')
 
     #just evaluate some of val
     indexes = [x for x in range(len(sup_val_data))]
@@ -46,6 +51,7 @@ def image_loader(path, batch_size, eval_pct=0.01):
         shuffle=True,
         num_workers=8
     )
+    print("done.", flush=True)
     return data_loader_sup_train, data_loader_sup_val, data_loader_unsup
 
 
