@@ -1,6 +1,9 @@
 #ignore pycharm project files
 .idea/
 
+#our folder
+saved_models/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
