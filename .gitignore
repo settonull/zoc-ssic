@@ -1,8 +1,9 @@
 #ignore pycharm project files
 .idea/
 
-#our folder
+#our models
 saved_models/
+*.pth
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
