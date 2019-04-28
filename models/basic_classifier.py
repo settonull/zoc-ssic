@@ -22,7 +22,7 @@ class BasicClassifier(nn.Module):
         self.main.fc = nn.Sequential(nn.Linear(512, 128),
                                  nn.ReLU(),
                                  nn.Dropout(dropout),
-                                 nn.Linear(128, n_classes),
+                                 nn.Linear(128, self.n_classes),
                                  nn.LogSoftmax(dim=1))
 
     def forward(self, img):
