@@ -1,15 +1,27 @@
 import torch
 import torch.nn as nn
 
+from torchvision import models
+
+
 class Model(nn.Module):
     def __init__(self):
         super(Model, self).__init__()
 
-        # Architecture
-        # TODO
+        self.n_classes = 1000
 
+        self.main = models.resnet18(pretrained=False)
+
+        self.main.fc = nn.Sequential(nn.Linear(512, 128),
+                                     nn.ReLU(),
+                                     nn.Dropout(0.2),
+                                     nn.Linear(128, self.n_classes),
+                                     nn.LogSoftmax(dim=1))
         # Load pre-trained model
         self.load_weights('weights.pth')
+
+        #Seems to need this, at least on windows
+        self.main = self.main.to('cuda')
 
     def load_weights(self, pretrained_model_path, cuda=True):
         # Load pretrained model
@@ -33,6 +45,6 @@ class Model(nn.Module):
             else:
                 raise ValueError("state_dict() keys do not match")
 
+
     def forward(self, x):
-        # TODO
-        raise NotImplementedError
+        return self.main(x)
