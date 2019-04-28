@@ -4,57 +4,6 @@ from argparse import ArgumentParser
 
 from trainers.classifier_trainer import ClassifierTrainer
 
-import torchvision.transforms as transforms
-from torchvision import datasets
-import torch
-import numpy as np
-from torch.utils.data import Subset
-
-def image_loader(path, batch_size, eval_pct=0.01):
-    transform = transforms.Compose(
-        [
-            transforms.ToTensor()
-        ]
-    )
-
-    print("Loading datasets...", flush=True, end='')
-    sup_train_data = datasets.ImageFolder('{}/{}/train'.format(path, 'supervised'), transform=transform)
-    sup_val_data = datasets.ImageFolder('{}/{}/val'.format(path, 'supervised'), transform=transform)
-    unsup_data = datasets.ImageFolder('{}/{}/'.format(path, 'unsupervised'), transform=transform)
-
-    print("done.", flush=True)
-
-    print("Creating dataloaders...", flush=True, end='')
-
-    #just evaluate some of val
-    indexes = [x for x in range(len(sup_val_data))]
-    np.random.shuffle(indexes)
-    amt = int(np.ceil(len(indexes) * eval_pct))
-    subset_sup_val_data = Subset(sup_val_data, indexes[:amt])
-
-
-    data_loader_sup_train = torch.utils.data.DataLoader(
-        sup_train_data,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=8
-    )
-    data_loader_sup_val = torch.utils.data.DataLoader(
-        subset_sup_val_data, 
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=8
-    )
-    data_loader_unsup = torch.utils.data.DataLoader(
-        unsup_data,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=8
-    )
-    print("done.", flush=True)
-    return data_loader_sup_train, data_loader_sup_val, data_loader_unsup
-
-
 if __name__ == '__main__':
     """
     Usage:
@@ -65,15 +14,15 @@ if __name__ == '__main__':
     """
 
     ap = ArgumentParser()
-    ap.add_argument("-mt", "--model_type", default='mc-bert',
+    ap.add_argument("-mt", "--model_type", default='vasic',
                     help="Name of model to use.")
-    ap.add_argument("-nc", "--n_classes", type=int, default=3000,
+    ap.add_argument("-nc", "--n_classes", type=int, default=1000,
                     help="Number of classes to predict.")
-    ap.add_argument("-bs", "--batch_size", type=int, default=2,
+    ap.add_argument("-bs", "--batch_size", type=int, default=8,
                     help="Batch size for optimization.")
-    ap.add_argument("-lr", "--learning_rate", type=float, default=3e-5,
+    ap.add_argument("-lr", "--learning_rate", type=float, default=0.0001,
                     help="Learning rate for optimization.")
-    ap.add_argument("-ne", "--num_epochs", type=int, default=5,
+    ap.add_argument("-ne", "--num_epochs", type=int, default=100,
                     help="Number of epochs for optimization.")
     ap.add_argument("-pt", "--patience", type=int, default=10,
                     help="Number of to wait before reducing learning rate.")
@@ -88,8 +37,6 @@ if __name__ == '__main__':
 
     args = vars(ap.parse_args())
 
-    data_loader_sup_train, data_loader_sup_val, data_loader_unsup = image_loader(args['data_path'], batch_size=args['batch_size'])
-
     trainer = ClassifierTrainer(model_type=args['model_type'],
                      n_classes=args['n_classes'],
                      batch_size=args['batch_size'],
@@ -102,4 +49,4 @@ if __name__ == '__main__':
                             )
 
 
-    trainer.fit(data_loader_sup_train, data_loader_sup_val, args['save_dir'])
+    trainer.fit(args['data_path'], args['save_dir'])

@@ -1,6 +1,5 @@
 
 import os
-
 import numpy as np
 from tqdm import tqdm
 
@@ -8,6 +7,8 @@ import torch
 from torch.optim import Adam
 
 from models.basic_classifier import BasicClassifier
+from data_loader import image_loader
+
 
 class ClassifierTrainer():
 
@@ -15,7 +16,7 @@ class ClassifierTrainer():
 
     def __init__(self, model_type='basic', n_classes=1000, batch_size=64,
                  learning_rate=3e-5, num_epochs=100, weight_decay=0,
-                 patience=10, min_lr=0):
+                 patience=10, min_lr=0, eval_pct=0.05):
         """
         Initialize Classifier trainer.
 
@@ -35,6 +36,7 @@ class ClassifierTrainer():
         self.weight_decay = weight_decay
         self.patience = patience
         self.min_lr = min_lr
+        self.eval_pct = eval_pct
 
         # Model attributes
         self.model = None
@@ -171,7 +173,7 @@ class ClassifierTrainer():
 
         return val_loss, acc
 
-    def fit(self, train_loader, val_loader, save_dir, warm_start=False):
+    def fit(self, data_dir, save_dir, warm_start=False):
         """
         Train the NN model.
 
@@ -205,6 +207,9 @@ class ClassifierTrainer():
         train_loss = 0
         train_acc = 0
 
+        train_loader, val_loader = image_loader(data_dir, batch_size=self.batch_size, transform=self.model.transform,
+                                                supervised=True, eval_pct=self.eval_pct)
+
         # train loop
         while self.nn_epoch < self.num_epochs + 1:
 
@@ -231,46 +236,6 @@ class ClassifierTrainer():
             if self.scheduler:
                 self.scheduler.step(val_acc)
 
-    def score(self, loader):
-        """
-        Score all predictions.
-
-        Args
-        ----
-            loader : PyTorch DataLoader.
-
-        """
-        self.model.eval()
-        raise NotImplementedError("Not yet implemented!")
-
-    def predict(self, loader):
-        """
-        Predict for an input.
-
-        Args
-        ----
-            loader : PyTorch DataLoader.
-
-        """
-        self.model.eval()
-        raise NotImplementedError("Not yet implemented!")
-
-    '''
-    def report_results(self, val_dataset, outfile_name):
-
-        val_loader = DataLoader(
-            val_dataset, batch_size=self.batch_size, shuffle=False,
-            num_workers=8)
-
-        f = open(outfile_name, 'w', newline='')
-        writer = csv.writer(f)
-
-        val_loss, val_acc = self._eval_epoch(val_loader, (writer, f))
-        f.close()
-
-        print("\nVal Loss: {}\tVal Acc: {}".format(
-            np.round(val_loss, 5), np.round(val_acc * 100, 2)), flush=True)
-    '''
 
     def _format_model_subdir(self):
         subdir = "classifier_mt{}-lr{}-nc{}-wd{}-pt{}-mlr".\

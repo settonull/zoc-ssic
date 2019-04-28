@@ -1,12 +1,16 @@
-"""Classifier head for MCB models."""
-
 from torch import nn
-
 from torchvision import models
+import torchvision.transforms as transforms
+
 
 class BasicClassifier(nn.Module):
 
     """Class classifier head for MCB style models."""
+    transform = transforms.Compose(
+        [
+            transforms.ToTensor()
+        ]
+    )
 
     def __init__(self, n_classes=1000, dropout=0.2):
         """Initialize SkipGramDistNet."""
