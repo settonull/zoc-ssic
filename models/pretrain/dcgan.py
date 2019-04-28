@@ -47,6 +47,8 @@ class Generator(nn.Module):
             output = self.main(input)
         return output
 
+    # If our particular model needs to do anything special to transform the image we can specify it here
+    # will need to copy this over to eval.py if we do anything special
     transform = transforms.Compose(
         [
             transforms.ToTensor()
@@ -87,6 +89,8 @@ class Discriminator(nn.Module):
 
         return output.view(-1, 1).squeeze(1)
 
+    # If our particular model needs to do anything special to transform the image we can specify it here
+    # will need to copy this over to eval.py if we do anything special
     transform = transforms.Compose(
         [
             transforms.ToTensor()

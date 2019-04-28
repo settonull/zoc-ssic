@@ -5,7 +5,8 @@ import torchvision.transforms as transforms
 
 class BasicClassifier(nn.Module):
 
-    """Class classifier head for MCB style models."""
+    #If our particular model needs to do anything special to transform the image we can specify it here
+    #will need to copy this over to eval.py if we do anything special
     transform = transforms.Compose(
         [
             transforms.ToTensor()

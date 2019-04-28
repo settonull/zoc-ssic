@@ -6,7 +6,7 @@ from tqdm import tqdm
 import torch
 from torch.optim import Adam
 
-from models.basic_classifier import BasicClassifier
+from models.classifier.basic_classifier import BasicClassifier
 from data_loader import image_loader
 
 

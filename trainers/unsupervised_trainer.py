@@ -7,9 +7,9 @@ import torch
 from torch.optim import Adam
 
 #for the GAN model
-from models.dcgan import Generator,Discriminator, weights_init
+from models.pretrain.dcgan import Generator,Discriminator, weights_init
 
-
+#module to load all our images
 from data_loader import image_loader
 
 
@@ -60,8 +60,9 @@ class UnsupervisedTrainer():
 
     def _init_nn(self):
         """Initialize the nn model for training."""
-        if self.model_type == 'gan':
 
+        #Initalize everything for our model
+        if self.model_type == 'gan':
             #should make these passed in paramaters
             self.nz = 100  # size of the latent z vector
             self.ngf = 64  # number of generator filters
@@ -110,6 +111,7 @@ class UnsupervisedTrainer():
         #self.torch_rng_state = torch.get_rng_state()
         #self.numpy_rng_state = np.random.get_state()
 
+    #since an unsupervised training loop can be very custom, we just define our own here
     def _train_GAN_epoch(self, loader):
         """Train epoch."""
         self.model_1.train()
@@ -178,7 +180,7 @@ class UnsupervisedTrainer():
         total_D_G_z2 /= samples_processed
 
         report = 'Loss_D: {.4f} Loss_G: {.4f} D(x): {.4f} D(G(z)): {.4f} / {.4f}'.format(
-                 total_errD.item(), total_errG.item(), total_D_x, total_D_G_z1, total_D_G_z2)
+                 total_errD, total_errG, total_D_x, total_D_G_z1, total_D_G_z2)
 
         return report, -total_errD
 
@@ -215,10 +217,11 @@ class UnsupervisedTrainer():
         train_loader = image_loader(data_dir, batch_size=self.batch_size, transform=self.model_1.transform,
                                         supervised=False, eval_pct=self.eval_pct)
 
+        #specify our train method here, as well as intialize what a "good" criteria is
         if self.model_type =='gan':
             train_epoch = self._train_GAN_epoch
             #use negative since we want larger numbers (but smaller loss) to be better performance
-            self.best_val_acc = -10000
+            self.best_eval_criteria = -10000
 
 
         # train loop
@@ -270,8 +273,8 @@ class UnsupervisedTrainer():
             fileloc = os.path.join(self.save_dir, self.model_dir, filename)
             with open(fileloc, 'wb') as file:
                 torch.save({'state_dict_1': self.model_1.state_dict(),
-                            'state_dict_2': self.model_2.state_dict(),
-                            'trainer_dict': self.__dict__}, file)
+                            'state_dict_2': self.model_2.state_dict()
+                            }, file)
 
     def load(self, model_dir, epoch, train_chunks=0, train_data_len=None):
         """
