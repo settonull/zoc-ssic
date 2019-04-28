@@ -262,8 +262,7 @@ class ClassifierTrainer():
             filename = "epoch_{}".format(self.nn_epoch) + '.pth'
             fileloc = os.path.join(self.save_dir, self.model_dir, filename)
             with open(fileloc, 'wb') as file:
-                torch.save({'state_dict': self.model.state_dict(),
-                            'trainer_dict': self.__dict__}, file)
+                torch.save(self.model.state_dict(), file)
 
     def load(self, model_dir, epoch, train_chunks=0, train_data_len=None):
         """
