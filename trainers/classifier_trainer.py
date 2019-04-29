@@ -7,6 +7,8 @@ import torch
 from torch.optim import Adam
 
 from models.classifier.basic_classifier import BasicClassifier
+from models.classifier.basic_ae import BasicAEClassifier
+
 from data_loader import image_loader
 
 
@@ -16,7 +18,7 @@ class ClassifierTrainer():
 
     def __init__(self, model_type='basic', n_classes=1000, batch_size=64,
                  learning_rate=3e-5, num_epochs=100, weight_decay=0,
-                 patience=10, min_lr=0, eval_pct=0.05):
+                 patience=10, min_lr=0, eval_pct=0.05, pretrain_weights=None):
         """
         Initialize Classifier trainer.
 
@@ -45,6 +47,7 @@ class ClassifierTrainer():
         self.nn_epoch = 0
         self.best_val_acc = 0
         self.save_dir = None
+        self.pretrain_weights = pretrain_weights
 
         # reproducability attributes
         self.torch_rng_state = None
@@ -56,6 +59,11 @@ class ClassifierTrainer():
         """Initialize the nn model for training."""
         if self.model_type == 'basic':
             self.model = BasicClassifier(self.n_classes)
+        elif self.model_type == 'ae-basic':
+            self.model = BasicAEClassifier(self.n_classes)
+            if self.pretrain_weights:
+                self.model.encoder.load_state_dict(torch.load(self.pretrain_weights)['state_dict_1'])
+
         else:
             raise ValueError("Did not recognize model type!")
 

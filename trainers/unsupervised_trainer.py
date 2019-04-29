@@ -1,4 +1,3 @@
-
 import os
 import numpy as np
 from tqdm import tqdm
@@ -8,6 +7,7 @@ from torch.optim import Adam
 
 #for the GAN model
 from models.pretrain.dcgan import Generator,Discriminator, weights_init
+from models.pretrain.basic_autoencoder import Encoder, Decoder
 
 #module to load all our images
 from data_loader import image_loader
@@ -79,6 +79,12 @@ class UnsupervisedTrainer():
             self.fixed_noise = torch.randn(self.batch_size, self.nz, 1, 1, device=self.device)
             self.real_label = 1
             self.fake_label = 0
+
+        elif self.model_type == 'ae-basic':
+            #should make these passed in paramaters
+
+            self.model_1 = Encoder()
+            self.model_2 = Decoder()
 
         else:
             raise ValueError("Did not recognize model type!")
@@ -179,10 +185,46 @@ class UnsupervisedTrainer():
         total_D_G_z1 /= samples_processed
         total_D_G_z2 /= samples_processed
 
-        report = 'Loss_D: {.4f} Loss_G: {.4f} D(x): {.4f} D(G(z)): {.4f} / {.4f}'.format(
+        report = 'Loss_D: {:.4f} Loss_G: {:.4f} D(x): {:.4f} D(G(z)): {:.4f} / {:.4f} '.format(
                  total_errD, total_errG, total_D_x, total_D_G_z1, total_D_G_z2)
 
         return report, -total_errD
+
+    # since an unsupervised training loop can be very custom, we just define our own here
+    def _train_AE_BASIC_epoch(self, loader):
+        """Train epoch."""
+        self.model_1.train()
+        self.model_2.train()
+
+        loss_fct = torch.nn.MSELoss()
+
+        total_loss = 0
+        samples_processed = 0
+
+        for batch_samples in tqdm(loader):
+            # train with real
+            self.model_1.zero_grad()
+            self.model_2.zero_grad()
+
+            img = batch_samples[0].to(self.device)
+            batch_size = img.shape[0]
+
+            enc = self.model_1(img)
+            output = self.model_2(enc)
+
+            loss = loss_fct(output, img)
+            loss.backward()
+            self.optimizer_1.step()
+            self.optimizer_2.step()
+
+            samples_processed += batch_size
+            total_loss += loss.item() * batch_size
+
+        total_loss /= samples_processed
+
+        report = 'Loss: {:.4f} '.format(total_loss)
+
+        return report, -total_loss
 
     def fit(self, data_dir, save_dir, warm_start=False):
         """
@@ -220,6 +262,11 @@ class UnsupervisedTrainer():
         #specify our train method here, as well as intialize what a "good" criteria is
         if self.model_type =='gan':
             train_epoch = self._train_GAN_epoch
+            #use negative since we want larger numbers (but smaller loss) to be better performance
+            self.best_eval_criteria = -10000
+
+        if self.model_type =='ae-basic':
+            train_epoch = self._train_AE_BASIC_epoch
             #use negative since we want larger numbers (but smaller loss) to be better performance
             self.best_eval_criteria = -10000
 

@@ -32,6 +32,8 @@ if __name__ == '__main__':
                     help="Location of images.")
     ap.add_argument("-sd", "--save_dir",
                     help="Location to save the model.")
+    ap.add_argument("-pw", "--pretrain_weights",
+                    help="model file with the pretrained weights.")
     ap.add_argument("-wd", "--weight_decay", type=float, default=1e-6,
                     help="Weight decay for nonbert models.")
 
@@ -45,8 +47,8 @@ if __name__ == '__main__':
                      weight_decay=args['weight_decay'],
                      patience=args['patience'],
                      min_lr=args['min_lr'],
-
-                            )
+                     pretrain_weights=args['pretrain_weights']
+                    )
 
 
     trainer.fit(args['data_path'], args['save_dir'])
