@@ -1,6 +1,7 @@
 import os
 import numpy as np
 from tqdm import tqdm
+import math
 
 import torch
 from torch.optim import Adam
@@ -8,10 +9,12 @@ from torch.optim import Adam
 #for the GAN model
 from models.pretrain.dcgan import Generator,Discriminator, weights_init
 from models.pretrain.basic_autoencoder import Encoder, Decoder
+from models.pretrain.vae import Encoder as VAE_Encoder, Decoder as VAE_Decoder
 
 #module to load all our images
 from data_loader import image_loader
 
+from torchvision.utils import save_image
 
 class UnsupervisedTrainer():
 
@@ -85,6 +88,12 @@ class UnsupervisedTrainer():
 
             self.model_1 = Encoder()
             self.model_2 = Decoder()
+
+        elif self.model_type == 'vae':
+
+            self.model_1 = VAE_Encoder()
+            self.model_2 = VAE_Decoder()
+
 
         else:
             raise ValueError("Did not recognize model type!")
@@ -188,7 +197,7 @@ class UnsupervisedTrainer():
         report = 'Loss_D: {:.4f} Loss_G: {:.4f} D(x): {:.4f} D(G(z)): {:.4f} / {:.4f} '.format(
                  total_errD, total_errG, total_D_x, total_D_G_z1, total_D_G_z2)
 
-        return report, -total_errD
+        return report, -total_errD, None
 
     # since an unsupervised training loop can be very custom, we just define our own here
     def _train_AE_BASIC_epoch(self, loader):
@@ -224,7 +233,67 @@ class UnsupervisedTrainer():
 
         report = 'Loss: {:.4f} '.format(total_loss)
 
-        return report, -total_loss
+        return report, -total_loss, None
+
+        # since an unsupervised training loop can be very custom, we just define our own here
+    def _train_VAE_epoch(self, loader):
+        """Train epoch."""
+        self.model_1.train()
+        self.model_2.train()
+
+        total_loss = 0
+        total_bce = 0
+        total_kld = 0
+        samples_processed = 0
+
+        def loss_fn(recon_x, x, mu, logvar):
+            BCE = torch.nn.functional.binary_cross_entropy(recon_x, x, size_average=False)
+            # BCE = F.mse_loss(recon_x, x, size_average=False)
+
+            # see Appendix B from VAE paper:
+            # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
+            # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+            KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+
+            return BCE + KLD, BCE, KLD
+
+        for batch_samples in tqdm(loader):
+            # train with real
+            self.model_1.zero_grad()
+            self.model_2.zero_grad()
+
+            img = batch_samples[0].to(self.device)
+            batch_size = img.shape[0]
+
+            z, mu, logvar = self.model_1(img)
+            output = self.model_2(z)
+
+            #print("in:",img.shape)
+            #print("out:", output.shape)
+
+            loss, bce, kld = loss_fn(output, img, mu, logvar)
+            loss.backward()
+            self.optimizer_1.step()
+            self.optimizer_2.step()
+
+            samples_processed += batch_size
+            total_loss += loss.item()
+            total_bce += bce.item()
+            total_kld += kld.item()
+
+        test_imgs = []
+        for i in range(int(math.ceil(batch_size/8))):
+            test_imgs.append(torch.cat([img[i], output[i]], dim=2))
+
+        test_img = torch.cat(test_imgs, dim=1)
+
+        total_loss /= samples_processed
+        total_bce /= samples_processed
+        total_kld /= samples_processed
+
+        report = "Loss: {:.3f} {:.3f} {:.3f}".format(total_loss, total_bce, total_kld)
+
+        return report, -total_loss, test_img
 
     def fit(self, data_dir, save_dir, warm_start=False):
         """
@@ -263,19 +332,27 @@ class UnsupervisedTrainer():
         if self.model_type =='gan':
             train_epoch = self._train_GAN_epoch
             #use negative since we want larger numbers (but smaller loss) to be better performance
-            self.best_eval_criteria = -10000
+            self.best_eval_criteria = -100000
 
         if self.model_type =='ae-basic':
             train_epoch = self._train_AE_BASIC_epoch
             #use negative since we want larger numbers (but smaller loss) to be better performance
-            self.best_eval_criteria = -10000
+            self.best_eval_criteria = -100000
+
+        if self.model_type =='vae':
+            train_epoch = self._train_VAE_epoch
+            #use negative since we want larger numbers (but smaller loss) to be better performance
+            self.best_eval_criteria = -100000
 
 
         # train loop
         while self.nn_epoch < self.num_epochs + 1:
 
             print("\nInitializing train epoch...", flush=True)
-            report, eval_criteria = train_epoch(train_loader)
+            report, eval_criteria, timg = train_epoch(train_loader)
+
+            if(timg is not None):
+                save_image(timg.cpu(), 'latest-' + str(self.nn_epoch) + '.png')
 
             # report
             print("\nEpoch: [{}/{}]".format(self.nn_epoch, self.num_epochs) + report, flush=True)
@@ -296,7 +373,7 @@ class UnsupervisedTrainer():
 
 
     def _format_model_subdir(self):
-        subdir = "classifier_mt{}-lr{}-wd{}-pt{}-mlr".\
+        subdir = "unsupervised_mt{}-lr{}-wd{}-pt{}-mlr".\
                 format(self.model_type, self.learning_rate,
                        self.weight_decay, self.patience,
                        self.min_lr)

@@ -8,6 +8,8 @@ from torch.optim import Adam
 
 from models.classifier.basic_classifier import BasicClassifier
 from models.classifier.basic_ae import BasicAEClassifier
+from models.classifier.vae_z_classifier import VAEZClassifier
+from models.classifier.vae_h_classifier import VAEHClassifier
 
 from data_loader import image_loader
 
@@ -61,6 +63,16 @@ class ClassifierTrainer():
             self.model = BasicClassifier(self.n_classes)
         elif self.model_type == 'ae-basic':
             self.model = BasicAEClassifier(self.n_classes)
+            if self.pretrain_weights:
+                self.model.encoder.load_state_dict(torch.load(self.pretrain_weights)['state_dict_1'])
+
+        elif self.model_type == 'vae-h':
+            self.model = VAEHClassifier(self.n_classes)
+            if self.pretrain_weights:
+                self.model.encoder.load_state_dict(torch.load(self.pretrain_weights)['state_dict_1'])
+
+        elif self.model_type == 'vae-z':
+            self.model = VAEZClassifier(self.n_classes)
             if self.pretrain_weights:
                 self.model.encoder.load_state_dict(torch.load(self.pretrain_weights)['state_dict_1'])
 
