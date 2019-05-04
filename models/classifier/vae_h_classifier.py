@@ -4,15 +4,15 @@ from models.pretrain.vae import Encoder
 
 class VAEHClassifier(nn.Module):
 
-    def __init__(self, n_classes=1000):
+    def __init__(self, n_classes=1000, cls_hid_dim=2048):
         super(VAEHClassifier,self).__init__()
 
         self.encoder = Encoder()
 
-        self.fc1 = nn.Linear(self.encoder.h_dim, 2048)
+        self.fc1 = nn.Linear(self.encoder.h_dim, cls_hid_dim)
         self.relu = nn.ReLU()
         self.drop = nn.Dropout(0.2)
-        self.fc2 = nn.Linear(2048, n_classes)
+        self.fc2 = nn.Linear(cls_hid_dim, n_classes)
         self.lsm = nn.LogSoftmax(dim=1)
 
     def forward(self ,x):

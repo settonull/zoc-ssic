@@ -20,7 +20,8 @@ class ClassifierTrainer():
 
     def __init__(self, model_type='basic', n_classes=1000, batch_size=64,
                  learning_rate=3e-5, num_epochs=100, weight_decay=0,
-                 patience=10, min_lr=0, eval_pct=0.05, pretrain_weights=None):
+                 patience=10, min_lr=0, eval_pct=0.05, pretrain_weights=None, cls_hid_dim=2048,
+                 remove_previous=True, early_stopping=5):
         """
         Initialize Classifier trainer.
 
@@ -41,6 +42,9 @@ class ClassifierTrainer():
         self.patience = patience
         self.min_lr = min_lr
         self.eval_pct = eval_pct
+        self.remove_previous = remove_previous
+        self.last_save_file = None
+        self.early_stopping = early_stopping
 
         # Model attributes
         self.model = None
@@ -50,6 +54,7 @@ class ClassifierTrainer():
         self.best_val_acc = 0
         self.save_dir = None
         self.pretrain_weights = pretrain_weights
+        self.cls_hid_dim = cls_hid_dim
 
         # reproducability attributes
         self.torch_rng_state = None
@@ -67,7 +72,7 @@ class ClassifierTrainer():
                 self.model.encoder.load_state_dict(torch.load(self.pretrain_weights)['state_dict_1'])
 
         elif self.model_type == 'vae-h':
-            self.model = VAEHClassifier(self.n_classes)
+            self.model = VAEHClassifier(self.n_classes, self.cls_hid_dim)
             if self.pretrain_weights:
                 self.model.encoder.load_state_dict(torch.load(self.pretrain_weights)['state_dict_1'])
 
@@ -91,8 +96,8 @@ class ClassifierTrainer():
             self.model = self.model.cuda()
 
         # reproducability and deteriministic continuation of models
-        #np.random.seed(1234)
-        #torch.manual_seed(1234)
+        np.random.seed(1234)
+        torch.manual_seed(1234)
         #torch.backends.cudnn.deterministic = True
         #torch.backends.cudnn.benchmark = False
         #self.torch_rng_state = torch.get_rng_state()
@@ -207,15 +212,16 @@ class ClassifierTrainer():
         # Print settings to output file
         print("Settings:\n\
                Model Type: {}\n\
-               Weight Decay: {}\n\
+               Classifier hidden: {}\n\
                Learning Rate: {}\n\
+               Weight Decay: {}\n\
                Patience: {}\n\
                Min LR: {}\n\
                Batch Size: {}\n\
                N Classes: {}\n\
                Save Dir: {}".format(
-                   self.model_type, self.weight_decay, self.learning_rate,
-                   self.patience, self.min_lr, self.batch_size,
+                   self.model_type, self.cls_hid_dim, self.learning_rate,
+                   self.weight_decay, self.patience, self.min_lr, self.batch_size,
                    self.n_classes, save_dir), flush=True)
 
         self.save_dir = save_dir
@@ -227,8 +233,10 @@ class ClassifierTrainer():
         train_loss = 0
         train_acc = 0
 
+        best_epoch = 0
+
         train_loader, val_loader = image_loader(data_dir, batch_size=self.batch_size, transform=self.model.transform,
-                                                supervised=True, eval_pct=self.eval_pct)
+                                                stype='supervised', eval_pct=self.eval_pct)
 
         # train loop
         while self.nn_epoch < self.num_epochs + 1:
@@ -247,22 +255,27 @@ class ClassifierTrainer():
 
             # save best
             if val_acc > self.best_val_acc:
+                best_epoch = self.nn_epoch
                 self.best_val_acc = val_acc
                 self.torch_rng_state = torch.get_rng_state()
                 self.numpy_rng_state = np.random.get_state()
                 self.save()
-            self.nn_epoch += 1
+
+            if (self.early_stopping > 0) and ((self.nn_epoch - best_epoch) >= self.early_stopping):
+                print("No progress in {} epochs, best acc: {}, exiting".format(self.nn_epoch, self.best_val_acc))
+                break
 
             if self.scheduler:
                 self.scheduler.step(val_acc)
 
+            self.nn_epoch += 1
 
     def _format_model_subdir(self):
-        subdir = "classifier_mt{}-lr{}-nc{}-wd{}-pt{}-mlr".\
+        subdir = "classifier_mt-{}_lr-{}_nc-{}_wd-{}_pt-{}_mlr-{}_hid-{}".\
                 format(self.model_type, self.learning_rate,
                        self.n_classes,
                        self.weight_decay, self.patience,
-                       self.min_lr)
+                       self.min_lr, self.cls_hid_dim)
         return subdir
 
     def save(self):
@@ -279,8 +292,12 @@ class ClassifierTrainer():
             if not os.path.isdir(os.path.join(self.save_dir, self.model_dir)):
                 os.makedirs(os.path.join(self.save_dir, self.model_dir))
 
+            if self.remove_previous and self.last_save_file is not None:
+                os.remove(self.last_save_file)
+
             filename = "epoch_{}".format(self.nn_epoch) + '.pth'
             fileloc = os.path.join(self.save_dir, self.model_dir, filename)
+            self.last_save_file = fileloc
             with open(fileloc, 'wb') as file:
                 torch.save(self.model.state_dict(), file)
 

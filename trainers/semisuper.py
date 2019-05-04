@@ -6,23 +6,20 @@ import math
 import torch
 from torch.optim import Adam
 
-#for the GAN model
-from models.pretrain.dcgan import Generator,Discriminator, weights_init
-from models.pretrain.basic_autoencoder import Encoder, Decoder
-from models.pretrain.vae import Encoder as VAE_Encoder, Decoder as VAE_Decoder
+from models.ssl.vae import Encoder as VAE_Encoder, Decoder as VAE_Decoder, VAEHClassifier
 
 #module to load all our images
 from data_loader import image_loader
 
 from torchvision.utils import save_image
 
-class UnsupervisedTrainer():
+class SemiSupervisedTrainer():
 
     """Class to train and evaluate BertVisualMemory."""
 
-    def __init__(self, model_type='basic', batch_size=64,
+    def __init__(self, model_type='basic',n_classes=1000, batch_size=64,
                  learning_rate=0.0002, num_epochs=100, weight_decay=0,
-                 patience=10, min_lr=0, eval_pct=0.05):
+                 patience=10, min_lr=0, eval_pct=0.05, cl_pct=0.5):
         """
         Initialize Classifier trainer.
 
@@ -42,17 +39,18 @@ class UnsupervisedTrainer():
         self.patience = patience
         self.min_lr = min_lr
         self.eval_pct = eval_pct
+        self.n_classes=n_classes
 
         # Model attributes
         self.model_1 = None
         self.model_2 = None
+        self.model_3 = None
         self.optimizer_1 = None
-        self.optimizer_2 = None
         self.scheduler_1 = None
-        self.scheduler_2 = None
-        self.nn_epoch = 1
+        self.nn_epoch = 0
         self.best_eval_criteria = 0
         self.save_dir = None
+        self.cl_pct = cl_pct
 
         # reproducability attributes
         self.torch_rng_state = None
@@ -64,59 +62,36 @@ class UnsupervisedTrainer():
     def _init_nn(self):
         """Initialize the nn model for training."""
 
-        #Initalize everything for our model
-        if self.model_type == 'gan':
-            #should make these passed in paramaters
-            self.nz = 100  # size of the latent z vector
-            self.ngf = 64  # number of generator filters
-            self.ndf = 64  # number of discrimiator filters
-            self.nc =3
-            self.ngpu = 1
-            self.imageSize = 96
-
-            self.model_1 = Generator(self.ngpu, self.nz, self.ngf, self.nc)
-            self.model_1.apply(weights_init)
-            self.model_2 = Discriminator(self.ngpu, self.nc, self.ndf)
-            self.model_2.apply(weights_init)
-
-            self.fixed_noise = torch.randn(self.batch_size, self.nz, 1, 1, device=self.device)
-            self.real_label = 1
-            self.fake_label = 0
-
-        elif self.model_type == 'ae-basic':
-            #should make these passed in paramaters
-
-            self.model_1 = Encoder()
-            self.model_2 = Decoder()
-
-        elif self.model_type == 'vae':
+        if self.model_type == 'vae':
 
             self.model_1 = VAE_Encoder()
             self.model_2 = VAE_Decoder()
-
+            self.model_3 = VAEHClassifier(self.n_classes)
 
         else:
             raise ValueError("Did not recognize model type!")
 
-        self.optimizer_1 = Adam(
-            self.model_1.parameters(), lr=self.learning_rate,
+        params = list(self.model_1.parameters()) + list(self.model_2.parameters())+ list(self.model_3.parameters())
+
+        self.optimizer_1 = Adam(params, lr=self.learning_rate,
             weight_decay=self.weight_decay)
 
         #self.scheduler_1 = torch.optim.lr_scheduler.ReduceLROnPlateau(
         #    self.optimizer, 'max', verbose=True, patience=self.patience,
         #    min_lr=self.min_lr)
 
-        self.optimizer_2 = Adam(
-            self.model_2.parameters(), lr=self.learning_rate,
-            weight_decay=self.weight_decay)
+        #self.optimizer_2 = Adam(
+        #    self.model_2.parameters(), lr=self.learning_rate,
+        #    weight_decay=self.weight_decay)
 
         #self.scheduler_2 = torch.optim.lr_scheduler.ReduceLROnPlateau(
         #    self.optimizer, 'max', verbose=True, patience=self.patience,
         #    min_lr=self.min_lr)
 
         if self.USE_CUDA:
-            self.model_1 = self.model_1.cuda()
-            self.model_2 = self.model_2.cuda()
+            self.model_1 = self.model_1.to(self.device)
+            self.model_2 = self.model_2.to(self.device)
+            self.model_3 = self.model_3.to(self.device)
 
         # reproducability and deteriministic continuation of models
         #np.random.seed(1234)
@@ -126,127 +101,27 @@ class UnsupervisedTrainer():
         #self.torch_rng_state = torch.get_rng_state()
         #self.numpy_rng_state = np.random.get_state()
 
-    #since an unsupervised training loop can be very custom, we just define our own here
-    def _train_GAN_epoch(self, loader):
-        """Train epoch."""
-        self.model_1.train()
-        self.model_2.train()
-
-        loss_fct = torch.nn.BCELoss()
-
-        #using specifc names just to make the code clearer
-        netG = self.model_1
-        optimizerG = self.optimizer_1
-        netD = self.model_2
-        optimizerD = self.optimizer_2
-
-        total_errD = 0
-        total_errG = 0
-        total_D_x = 0
-        total_D_G_z1 = 0
-        total_D_G_z2 = 0
-        samples_processed = 0
-
-        for batch_samples in tqdm(loader):
-
-            # train with real
-            netD.zero_grad()
-            real_cpu = batch_samples[0].to(self.device)
-            batch_size = real_cpu.size(0)
-            label = torch.full((batch_size,), self.real_label, device=self.device)
-            output = netD(real_cpu)
-            errD_real = loss_fct(output, label)
-            errD_real.backward()
-            D_x = output.mean().item()
-
-            # train with fake
-            noise = torch.randn(batch_size, self.nz, 1, 1, device=self.device)
-            fake = netG(noise)
-            label.fill_(self.fake_label)
-            output = netD(fake.detach())
-            errD_fake = loss_fct(output, label)
-            errD_fake.backward()
-            D_G_z1 = output.mean().item()
-            errD = errD_real + errD_fake
-            optimizerD.step()
-
-            ############################
-            # (2) Update G network: maximize log(D(G(z)))
-            ###########################
-            netG.zero_grad()
-            label.fill_(self.real_label)  # fake labels are real for generator cost
-            output = netD(fake)
-            errG = loss_fct(output, label)
-            errG.backward()
-            D_G_z2 = output.mean().item()
-            optimizerG.step()
-
-            samples_processed += batch_size
-            total_errG += errG.item() * batch_size
-            total_errD += errD.item() * batch_size
-            total_D_x += D_x * batch_size
-            total_D_G_z1 += D_G_z1 * batch_size
-            total_D_G_z2 += D_G_z2 * batch_size
-
-        total_errG /= samples_processed
-        total_errD /= samples_processed
-        total_D_x /= samples_processed
-        total_D_G_z1 /= samples_processed
-        total_D_G_z2 /= samples_processed
-
-        report = 'Loss_D: {:.4f} Loss_G: {:.4f} D(x): {:.4f} D(G(z)): {:.4f} / {:.4f} '.format(
-                 total_errD, total_errG, total_D_x, total_D_G_z1, total_D_G_z2)
-
-        return report, -total_errD, None
-
-    # since an unsupervised training loop can be very custom, we just define our own here
-    def _train_AE_BASIC_epoch(self, loader):
-        """Train epoch."""
-        self.model_1.train()
-        self.model_2.train()
-
-        loss_fct = torch.nn.MSELoss()
-
-        total_loss = 0
-        samples_processed = 0
-
-        for batch_samples in tqdm(loader):
-            # train with real
-            self.model_1.zero_grad()
-            self.model_2.zero_grad()
-
-            img = batch_samples[0].to(self.device)
-            batch_size = img.shape[0]
-
-            enc = self.model_1(img)
-            output = self.model_2(enc)
-
-            loss = loss_fct(output, img)
-            loss.backward()
-            self.optimizer_1.step()
-            self.optimizer_2.step()
-
-            samples_processed += batch_size
-            total_loss += loss.item() * batch_size
-
-        total_loss /= samples_processed
-
-        report = 'Loss: {:.4f} '.format(total_loss)
-
-        return report, -total_loss, None
 
         # since an unsupervised training loop can be very custom, we just define our own here
     def _train_VAE_epoch(self, loader):
         """Train epoch."""
         self.model_1.train()
         self.model_2.train()
+        self.model_3.train()
 
         total_loss = 0
         total_bce = 0
         total_kld = 0
         samples_processed = 0
+        total_predict_loss = 0
+        lbl_samples_processed = 0
+        correct = 0
 
-        def loss_fn(recon_x, x, mu, logvar):
+        cl_pct = self.cl_pct
+
+        prd_loss_fct = torch.nn.NLLLoss(ignore_index=-1)
+
+        def rec_loss_fct(recon_x, x, mu, logvar):
             BCE = torch.nn.functional.binary_cross_entropy(recon_x, x, size_average=False)
             # BCE = F.mse_loss(recon_x, x, size_average=False)
 
@@ -261,22 +136,45 @@ class UnsupervisedTrainer():
             # train with real
             self.model_1.zero_grad()
             self.model_2.zero_grad()
+            self.model_3.zero_grad()
 
             img = batch_samples[0].to(self.device)
+            labels = batch_samples[1].to(self.device)
+
             batch_size = img.shape[0]
 
-            z, mu, logvar = self.model_1(img)
+            #reconstruct image
+            z, mu, logvar, h = self.model_1(img)
             output = self.model_2(z)
 
-            #print("in:",img.shape)
-            #print("out:", output.shape)
+            #make classifications
+            logits = self.model_3(h)
+            probs = torch.nn.functional.log_softmax(logits, dim=1)
 
-            loss, bce, kld = loss_fn(output, img, mu, logvar)
+            recon_loss, bce, kld = rec_loss_fct(output, img, mu, logvar)
+            #print("porbs:", probs.shape, "labels:", labels.shape, labels)
+            predict_loss = prd_loss_fct(probs, labels)
+
+            #mask out the loss from any unlabeled
+            mask = labels != -1
+            lbl_smpls = mask.sum().item()
+            #predict_loss_list *= mask.float()
+            #predict_loss = predict_loss_list.sum() / lbl_smpls
+
+            # compute acc
+            predicts = torch.argmax(probs, dim=1)
+            correct += torch.sum(predicts == labels).item()
+
+            #add the losses
+            loss = (recon_loss * (1-cl_pct)) + (predict_loss * cl_pct)
             loss.backward()
+
             self.optimizer_1.step()
-            self.optimizer_2.step()
 
             samples_processed += batch_size
+            lbl_samples_processed += lbl_smpls
+
+            total_predict_loss += predict_loss.item() * lbl_smpls
             total_loss += loss.item()
             total_bce += bce.item()
             total_kld += kld.item()
@@ -287,13 +185,63 @@ class UnsupervisedTrainer():
 
         test_img = torch.cat(test_imgs, dim=1)
 
+        total_predict_loss /= lbl_samples_processed
         total_loss /= samples_processed
         total_bce /= samples_processed
         total_kld /= samples_processed
+        acc = (correct / lbl_samples_processed) * 100
 
-        report = "Loss: {:.3f} {:.3f} {:.3f}".format(total_loss, total_bce, total_kld)
+        report = "Loss: {:.3f} {:.3f} {:.3f} {:.3f}\tAcc:{:.2f}".format(
+            total_predict_loss, total_loss, total_bce, total_kld, acc)
 
-        return report, -total_loss, test_img
+        return report, total_loss, test_img
+
+    def _eval_epoch(self, loader, outfile=None):
+        """Eval epoch."""
+        self.model_1.eval()
+        self.model_3.eval()
+        val_loss = 0
+        samples_processed = 0
+        correct = 0
+        loss_fct = torch.nn.NLLLoss()
+
+        with torch.no_grad():
+            for batch_samples in tqdm(loader):
+
+                # prepare training sample
+                # batch_size x RGB x height X width
+                images = batch_samples[0]
+                # batch_size
+                labels = batch_samples[1]
+
+                batch_size = images.size(0)
+
+                if self.USE_CUDA:
+                    images = images.to(self.device)
+                    labels = labels.to(self.device)
+
+                # forward pass
+                # let's calculate loss and accuracy out here
+                _, _, _, h = self.model_1(images)
+                logits = self.model_3(h)
+
+                probs = torch.nn.functional.log_softmax(logits, dim=1)
+                loss = loss_fct(probs, labels)
+
+                # compute train loss and acc
+                predicts = torch.argmax(probs, dim=1)
+                correct += torch.sum(predicts == labels).item()
+
+                samples_processed += batch_size
+                val_loss += loss.item() * batch_size
+
+            val_loss /= samples_processed
+            acc = correct / samples_processed
+
+        return val_loss, acc
+
+
+
 
     def fit(self, data_dir, save_dir, warm_start=False):
         """
@@ -308,13 +256,14 @@ class UnsupervisedTrainer():
         # Print settings to output file
         print("Settings:\n\
                Model Type: {}\n\
+               Classifer pct: {}\n\
                Weight Decay: {}\n\
                Learning Rate: {}\n\
                Patience: {}\n\
                Min LR: {}\n\
                Batch Size: {}\n\
                Save Dir: {}".format(
-                   self.model_type, self.weight_decay, self.learning_rate,
+                   self.model_type, self.cl_pct, self.weight_decay, self.learning_rate,
                    self.patience, self.min_lr, self.batch_size,
                     save_dir), flush=True)
 
@@ -325,37 +274,38 @@ class UnsupervisedTrainer():
         if not warm_start:
             self._init_nn()
 
-        train_loader = image_loader(data_dir, batch_size=self.batch_size, transform=self.model_1.transform,
-                                        stype='unsupervised', eval_pct=self.eval_pct)
+        train_loader, val_loader = image_loader(data_dir, batch_size=self.batch_size, transform=self.model_1.transform,
+                                        stype='semi',  eval_pct=self.eval_pct)
 
         #specify our train method here, as well as intialize what a "good" criteria is
-        if self.model_type =='gan':
-            train_epoch = self._train_GAN_epoch
-            #use negative since we want larger numbers (but smaller loss) to be better performance
-            self.best_eval_criteria = -100000
-
-        if self.model_type =='ae-basic':
-            train_epoch = self._train_AE_BASIC_epoch
-            #use negative since we want larger numbers (but smaller loss) to be better performance
-            self.best_eval_criteria = -100000
-
         if self.model_type =='vae':
             train_epoch = self._train_VAE_epoch
             #use negative since we want larger numbers (but smaller loss) to be better performance
-            self.best_eval_criteria = -100000
+            self.best_eval_criteria = 0
 
 
         # train loop
         while self.nn_epoch < self.num_epochs + 1:
 
-            print("\nInitializing train epoch...", flush=True)
-            report, eval_criteria, timg = train_epoch(train_loader)
+            if self.nn_epoch > 0:
+                print("\nInitializing train epoch...", flush=True)
+                report, eval_criteria, timg = train_epoch(train_loader)
+            else:
+                report = ""
+                timg = None
 
-            if(timg is not None):
-                save_image(timg.cpu(), 'latest-' + str(self.nn_epoch) + '.png')
+            print("\nInitializing val epoch...", flush=True)
+            val_loss, val_acc = self._eval_epoch(val_loader)
+
+            eval_criteria = val_acc
 
             # report
-            print("\nEpoch: [{}/{}]".format(self.nn_epoch, self.num_epochs) + report, flush=True)
+            print("\nEpoch: [{}/{}]\t".format(self.nn_epoch, self.num_epochs)  +  report +
+                  "\tVal Loss: {:.3f}\tVal Acc: {:.3f}".format(val_loss, val_acc * 100), flush=True)
+
+
+            if(timg is not None):
+                save_image(timg.cpu(), 'semi-latest-' + str(self.nn_epoch) + '.png')
 
             # save best
             if eval_criteria > self.best_eval_criteria:
@@ -368,15 +318,12 @@ class UnsupervisedTrainer():
             if self.scheduler_1:
                 self.scheduler.step(eval_criteria)
 
-            if self.scheduler_2:
-                self.scheduler.step(eval_criteria)
-
 
     def _format_model_subdir(self):
-        subdir = "unsupervised_mt{}-lr{}-wd{}-pt{}-mlr".\
+        subdir = "semi_mt-{}_lr-{}_wd-{}_pt-{}_mlr-{}_cp-{}".\
                 format(self.model_type, self.learning_rate,
                        self.weight_decay, self.patience,
-                       self.min_lr)
+                       self.min_lr, self.cl_pct)
         return subdir
 
     def save(self):

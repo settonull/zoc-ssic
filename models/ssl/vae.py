@@ -61,7 +61,7 @@ class Encoder(nn.Module):
     def forward(self, x):
         h = self.encoder(x)
         z, mu, logvar = self.bottleneck(h)
-        return z, mu, logvar
+        return z, mu, logvar, h
 
     # If our particular model needs to do anything special to transform the image we can specify it here
     # will need to copy this over to eval.py if we do anything special
@@ -120,6 +120,31 @@ class Decoder(nn.Module):
     def forward(self, z):
         x = self.decode(z)
         return x
+
+
+class VAEHClassifier(nn.Module):
+
+    def __init__(self, n_classes=1000):
+        super(VAEHClassifier,self).__init__()
+
+        self.fc1 = nn.Linear(h_size, 1024)
+        self.relu = nn.ReLU()
+        self.drop = nn.Dropout(0.2)
+        self.fc2 = nn.Linear(1024, n_classes)
+        self.lsm = nn.LogSoftmax(dim=1)
+
+    def forward(self, h):
+
+        x = self.fc1(h)
+        x = self.relu(x)
+        x = self.drop(x)
+        x = self.fc2(x)
+        x = self.lsm(x)
+        return x
+
+    # If our particular model needs to do anything special to transform the image we can specify it here
+    # will need to copy this over to eval.py if we do anything special
+    transform = Encoder.transform
 
 
 

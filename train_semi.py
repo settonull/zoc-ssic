@@ -2,7 +2,7 @@
 
 from argparse import ArgumentParser
 
-from trainers.classifier_trainer import ClassifierTrainer
+from trainers.semisuper import SemiSupervisedTrainer
 
 if __name__ == '__main__':
     """
@@ -28,6 +28,9 @@ if __name__ == '__main__':
                     help="Number of to wait before reducing learning rate.")
     ap.add_argument("-ml", "--min_lr", type=float, default=0.0,
                     help="Minimum learning rate.")
+    ap.add_argument("-ep", "--eval_pct", type=float, default=0.5,
+                    help="How much to evaluate each epoch.")
+
     ap.add_argument("-td", "--data_path",
                     help="Location of images.")
     ap.add_argument("-sd", "--save_dir",
@@ -36,12 +39,13 @@ if __name__ == '__main__':
                     help="model file with the pretrained weights.")
     ap.add_argument("-wd", "--weight_decay", type=float, default=1e-6,
                     help="Weight decay for nonbert models.")
-    ap.add_argument("-ch", "--classifier_hidden", type=int, default=2048,
-                    help="Size of classifier hidden layer")
+
+    ap.add_argument("-cp", "--classifier_pct", type=float, default=0.5,
+                    help="Classifier's percent of total loss")
 
     args = vars(ap.parse_args())
 
-    trainer = ClassifierTrainer(model_type=args['model_type'],
+    trainer = SemiSupervisedTrainer(model_type=args['model_type'],
                      n_classes=args['n_classes'],
                      batch_size=args['batch_size'],
                      learning_rate=args['learning_rate'],
@@ -49,9 +53,8 @@ if __name__ == '__main__':
                      weight_decay=args['weight_decay'],
                      patience=args['patience'],
                      min_lr=args['min_lr'],
-                     pretrain_weights=args['pretrain_weights'],
-                     cls_hid_dim = args['classifier_hidden']
-
+                     eval_pct=args['eval_pct'],
+                     cl_pct=args['classifier_pct']
                     )
 
 
