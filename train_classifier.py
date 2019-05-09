@@ -38,6 +38,8 @@ if __name__ == '__main__':
                     help="Weight decay for nonbert models.")
     ap.add_argument("-ch", "--classifier_hidden", type=int, default=2048,
                     help="Size of classifier hidden layer")
+    ap.add_argument("-es", "--early_stop", type=int, default=5,
+                    help="number of epochs of no improvement to stop at")
 
     args = vars(ap.parse_args())
 
@@ -50,8 +52,8 @@ if __name__ == '__main__':
                      patience=args['patience'],
                      min_lr=args['min_lr'],
                      pretrain_weights=args['pretrain_weights'],
-                     cls_hid_dim = args['classifier_hidden']
-
+                     cls_hid_dim = args['classifier_hidden'],
+                     early_stopping = args['early_stop']
                     )
 
 
