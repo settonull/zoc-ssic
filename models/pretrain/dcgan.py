@@ -13,9 +13,9 @@ def weights_init(m):
 
 
 class Generator(nn.Module):
-    def __init__(self, ngpu, nz, ngf, nc):
+    def __init__(self, nz, ngf, nc):
         super(Generator, self).__init__()
-        self.ngpu = ngpu
+
         self.main = nn.Sequential(
             # input is Z, going into a convolution
             nn.ConvTranspose2d(     nz, ngf * 8, 4, 1, 0, bias=False),
@@ -40,10 +40,8 @@ class Generator(nn.Module):
         )
 
     def forward(self, input):
-        if input.is_cuda and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
-        else:
-            output = self.main(input)
+
+        output = self.main(input)
         return output
 
     # If our particular model needs to do anything special to transform the image we can specify it here
@@ -56,9 +54,9 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, ngpu, nc, ndf):
+    def __init__(self, nc, ndf):
         super(Discriminator, self).__init__()
-        self.ngpu = ngpu
+
         self.main = nn.Sequential(
             # input is (nc) x 96 x 96
             nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
@@ -81,10 +79,7 @@ class Discriminator(nn.Module):
         )
 
     def forward(self, input):
-        if input.is_cuda and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
-        else:
-            output = self.main(input)
+        output = self.main(input)
 
         return output.view(-1, 1).squeeze(1)
 

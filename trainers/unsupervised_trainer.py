@@ -2,6 +2,7 @@ import os
 import numpy as np
 from tqdm import tqdm
 import math
+import random
 
 import torch
 from torch.optim import Adam
@@ -9,7 +10,7 @@ from torch.optim import Adam
 #for the GAN model
 from models.pretrain.dcgan import Generator,Discriminator, weights_init
 from models.pretrain.basic_autoencoder import Encoder, Decoder
-from models.pretrain.vae import Encoder as VAE_Encoder, Decoder as VAE_Decoder
+from models.pretrain.vae2 import Encoder as VAE_Encoder, Decoder as VAE_Decoder
 
 #module to load all our images
 from data_loader import image_loader
@@ -64,22 +65,30 @@ class UnsupervisedTrainer():
     def _init_nn(self):
         """Initialize the nn model for training."""
 
+        # Adam defualts
+        beta1 = 0.9
+        beta2 = 0.999
+
         #Initalize everything for our model
         if self.model_type == 'gan':
+
+            #override the Adam beta
+            beta1 = 0.5
+
             #should make these passed in paramaters
-            self.nz = 100  # size of the latent z vector
+            self.z_dim = 100  # size of the latent z vector
             self.ngf = 64  # number of generator filters
             self.ndf = 64  # number of discrimiator filters
-            self.nc =3
-            self.ngpu = 1
+            self.nc = 3 #number of colors
+            self.ngpu = 1 #number of GPUs
             self.imageSize = 96
 
-            self.model_1 = Generator(self.ngpu, self.nz, self.ngf, self.nc)
+            self.model_1 = Generator(self.z_dim, self.ngf, self.nc)
             self.model_1.apply(weights_init)
-            self.model_2 = Discriminator(self.ngpu, self.nc, self.ndf)
+            self.model_2 = Discriminator( self.nc, self.ndf)
             self.model_2.apply(weights_init)
 
-            self.fixed_noise = torch.randn(self.batch_size, self.nz, 1, 1, device=self.device)
+            self.fixed_noise = torch.randn(self.batch_size, self.z_dim, 1, 1, device=self.device)
             self.real_label = 1
             self.fake_label = 0
 
@@ -100,7 +109,7 @@ class UnsupervisedTrainer():
 
         self.optimizer_1 = Adam(
             self.model_1.parameters(), lr=self.learning_rate,
-            weight_decay=self.weight_decay)
+            weight_decay=self.weight_decay, betas=(beta1, beta2))
 
         #self.scheduler_1 = torch.optim.lr_scheduler.ReduceLROnPlateau(
         #    self.optimizer, 'max', verbose=True, patience=self.patience,
@@ -108,7 +117,7 @@ class UnsupervisedTrainer():
 
         self.optimizer_2 = Adam(
             self.model_2.parameters(), lr=self.learning_rate,
-            weight_decay=self.weight_decay)
+            weight_decay=self.weight_decay, betas=(beta1, beta2))
 
         #self.scheduler_2 = torch.optim.lr_scheduler.ReduceLROnPlateau(
         #    self.optimizer, 'max', verbose=True, patience=self.patience,
@@ -151,16 +160,16 @@ class UnsupervisedTrainer():
 
             # train with real
             netD.zero_grad()
-            real_cpu = batch_samples[0].to(self.device)
-            batch_size = real_cpu.size(0)
+            img = batch_samples[0].to(self.device)
+            batch_size = img.size(0)
             label = torch.full((batch_size,), self.real_label, device=self.device)
-            output = netD(real_cpu)
+            output = netD(img)
             errD_real = loss_fct(output, label)
             errD_real.backward()
             D_x = output.mean().item()
 
             # train with fake
-            noise = torch.randn(batch_size, self.nz, 1, 1, device=self.device)
+            noise = torch.randn(batch_size, self.z_dim, 1, 1, device=self.device)
             fake = netG(noise)
             label.fill_(self.fake_label)
             output = netD(fake.detach())
@@ -188,6 +197,21 @@ class UnsupervisedTrainer():
             total_D_G_z1 += D_G_z1 * batch_size
             total_D_G_z2 += D_G_z2 * batch_size
 
+
+        #generate a few fake images
+        fake_imgs = netG(self.fixed_noise)
+        exmpl_layers = []
+        sze = int(batch_size / 8)
+        for i in range(sze):
+            exmlp_imgs= []
+            for j in range(sze):
+                v = i * sze + j
+                exmlp_imgs.append(fake_imgs[v])
+            exmpl_layers.append(torch.cat(exmlp_imgs, dim=2))
+
+        exmpl_imgs = torch.cat(exmpl_layers, dim=1)
+
+
         total_errG /= samples_processed
         total_errD /= samples_processed
         total_D_x /= samples_processed
@@ -197,7 +221,7 @@ class UnsupervisedTrainer():
         report = 'Loss_D: {:.4f} Loss_G: {:.4f} D(x): {:.4f} D(G(z)): {:.4f} / {:.4f} '.format(
                  total_errD, total_errG, total_D_x, total_D_G_z1, total_D_G_z2)
 
-        return report, -total_errD, None
+        return report, -total_errD, exmpl_imgs
 
     # since an unsupervised training loop can be very custom, we just define our own here
     def _train_AE_BASIC_epoch(self, loader):
@@ -326,7 +350,7 @@ class UnsupervisedTrainer():
             self._init_nn()
 
         train_loader = image_loader(data_dir, batch_size=self.batch_size, transform=self.model_1.transform,
-                                        stype='unsupervised', eval_pct=self.eval_pct)
+                                        stype='un', eval_pct=self.eval_pct)
 
         #specify our train method here, as well as intialize what a "good" criteria is
         if self.model_type =='gan':
@@ -352,7 +376,7 @@ class UnsupervisedTrainer():
             report, eval_criteria, timg = train_epoch(train_loader)
 
             if(timg is not None):
-                save_image(timg.cpu(), 'latest-' + str(self.nn_epoch) + '.png')
+                save_image(timg.cpu(), self.model_type + '-epoch-' + str(self.nn_epoch) + '.png')
 
             # report
             print("\nEpoch: [{}/{}]".format(self.nn_epoch, self.num_epochs) + report, flush=True)

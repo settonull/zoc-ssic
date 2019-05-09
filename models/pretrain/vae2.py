@@ -1,9 +1,9 @@
 import torch.nn as nn
 import torchvision.transforms as transforms
 import torch
+from torchvision import models
 
-
-h_size = 4096
+h_size = 2048
 z_size = 1024
 
 class Flatten(nn.Module):
@@ -18,6 +18,18 @@ class UnFlatten(nn.Module):
 class Encoder(nn.Module):
     def __init__(self, image_channels=3, h_dim=h_size, z_dim=z_size):
         super(Encoder, self).__init__()
+
+        self.encoder = models.resnet50(pretrained=False)
+        self.encoder.fc = nn.Sequential(Flatten())
+
+        '''
+        #self.main.fc = nn.Sequential(nn.Linear(512, 128),
+        #                             nn.ReLU(),
+        #                             nn.Dropout(dropout),
+        #                             nn.Linear(128, self.n_classes),
+        #                             nn.LogSoftmax(dim=1))
+
+        
         self.encoder = nn.Sequential(
             nn.Conv2d(image_channels, 32, kernel_size=4, stride=2),
             nn.BatchNorm2d(32),
@@ -33,6 +45,7 @@ class Encoder(nn.Module):
             nn.ReLU(),
             Flatten()
         )
+        '''
         self.h_dim = h_dim
         self.z_dim = z_dim
 
@@ -61,7 +74,7 @@ class Encoder(nn.Module):
     def forward(self, x):
         h = self.encoder(x)
         z, mu, logvar = self.bottleneck(h)
-        return z, mu, logvar, h
+        return z, mu, logvar
 
     # If our particular model needs to do anything special to transform the image we can specify it here
     # will need to copy this over to eval.py if we do anything special
@@ -120,33 +133,6 @@ class Decoder(nn.Module):
     def forward(self, z):
         x = self.decode(z)
         return x
-
-
-
-
-class VAEHClassifier(nn.Module):
-
-    def __init__(self, n_classes=1000, cls_hid_size=2048):
-        super(VAEHClassifier,self).__init__()
-
-        self.fc1 = nn.Linear(h_size, cls_hid_size)
-        self.relu = nn.ReLU()
-        self.drop = nn.Dropout(0.2)
-        self.fc2 = nn.Linear(cls_hid_size, n_classes)
-        self.lsm = nn.LogSoftmax(dim=1)
-
-    def forward(self, h):
-
-        x = self.fc1(h)
-        x = self.relu(x)
-        x = self.drop(x)
-        x = self.fc2(x)
-        x = self.lsm(x)
-        return x
-
-    # If our particular model needs to do anything special to transform the image we can specify it here
-    # will need to copy this over to eval.py if we do anything special
-    transform = Encoder.transform
 
 
 

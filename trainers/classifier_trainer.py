@@ -10,6 +10,7 @@ from models.classifier.basic_classifier import BasicClassifier
 from models.classifier.basic_ae import BasicAEClassifier
 from models.classifier.vae_z_classifier import VAEZClassifier
 from models.classifier.vae_h_classifier import VAEHClassifier
+from models.classifier.gan_classifier import GANClassifier
 
 from data_loader import image_loader
 
@@ -80,6 +81,10 @@ class ClassifierTrainer():
             self.model = VAEZClassifier(self.n_classes)
             if self.pretrain_weights:
                 self.model.encoder.load_state_dict(torch.load(self.pretrain_weights)['state_dict_1'])
+        elif self.model_type == 'gan':
+            self.model = GANClassifier(self.n_classes, self.cls_hid_dim)
+            if self.pretrain_weights:
+                self.model.load_state_dict(torch.load(self.pretrain_weights)['state_dict_2'], strict=False)
 
         else:
             raise ValueError("Did not recognize model type!")

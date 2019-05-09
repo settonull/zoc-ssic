@@ -12,7 +12,6 @@ def image_loader(path, batch_size, transform, stype=None, eval_pct=1.0):
     np.random.seed(1234)
     torch.manual_seed(1234)
 
-
     if 'supervised' in stype:
         print("Loading supervised datasets...", flush=True, end='')
         sup_train_data = datasets.ImageFolder('{}/{}/train'.format(path, 'supervised'), transform=transform)
@@ -39,7 +38,7 @@ def image_loader(path, batch_size, transform, stype=None, eval_pct=1.0):
         print("done.", flush=True)
         return data_loader_sup_train, data_loader_sup_val
 
-    elif 'unsupervised' in stype:
+    elif 'un' in stype:
         print("Loading unsupervised datasets...", flush=True, end='')
         unsup_data = datasets.ImageFolder('{}/{}/'.format(path, 'unsupervised'), transform=transform)
         data_loader_unsup = torch.utils.data.DataLoader(
