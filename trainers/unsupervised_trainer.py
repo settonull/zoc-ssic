@@ -197,20 +197,17 @@ class UnsupervisedTrainer():
             total_D_G_z1 += D_G_z1 * batch_size
             total_D_G_z2 += D_G_z2 * batch_size
 
-
         #generate a few fake images
         fake_imgs = netG(self.fixed_noise)
         exmpl_layers = []
-        sze = int(batch_size / 8)
+        sze = int(batch_size ** 0.5)
         for i in range(sze):
             exmlp_imgs= []
             for j in range(sze):
-                v = i * sze + j
+                v = (i * sze) + j
                 exmlp_imgs.append(fake_imgs[v])
             exmpl_layers.append(torch.cat(exmlp_imgs, dim=2))
-
         exmpl_imgs = torch.cat(exmpl_layers, dim=1)
-
 
         total_errG /= samples_processed
         total_errD /= samples_processed
