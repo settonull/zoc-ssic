@@ -47,7 +47,7 @@ class ClassifierTrainer():
         self.remove_previous = remove_previous
         self.last_save_file = None
         self.early_stopping = early_stopping
-        self.opt = opt
+        self.opt = opt.lower()
 
         # Model attributes
         self.model = None
@@ -101,9 +101,12 @@ class ClassifierTrainer():
             self.optimizer = Adam(
                 self.model.parameters(), lr=self.learning_rate,
                 weight_decay=self.weight_decay)
-        elif self.opt == 'SGD':
+        elif self.opt == 'sgd':
             self.optimizer = SGD(
                 self.model.parameters(), lr=self.learning_rate)
+        else:
+            print("Unknown optimizer", self.opt, "only adam or sgd supported")
+            exit(-1)
 
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, 'max', verbose=True, patience=self.patience,
@@ -292,11 +295,10 @@ class ClassifierTrainer():
             self.nn_epoch += 1
 
     def _format_model_subdir(self):
-        subdir = "classifier_mt-{}_lr-{}_nc-{}_wd-{}_pt-{}_mlr-{}_hid-{}".\
+        subdir = "classifier_mt-{}_lr-{}_wd-{}_pt-{}_mlr-{}_hid-{}_opt-{}_extr-{}".\
                 format(self.model_type, self.learning_rate,
-                       self.n_classes,
                        self.weight_decay, self.patience,
-                       self.min_lr, self.cls_hid_dim)
+                       self.min_lr, self.cls_hid_dim, self.opt, self.extra_cls)
         return subdir
 
     def save(self):
