@@ -103,7 +103,8 @@ class ClassifierTrainer():
                 weight_decay=self.weight_decay)
         elif self.opt == 'sgd':
             self.optimizer = SGD(
-                self.model.parameters(), lr=self.learning_rate)
+                self.model.parameters(), lr=self.learning_rate,
+                weight_decay=self.weight_decay)
         else:
             print("Unknown optimizer", self.opt, "only adam or sgd supported")
             exit(-1)
@@ -242,11 +243,12 @@ class ClassifierTrainer():
                Classifier hidden: {}\n\
                Samples per Classes: {}\n\
                Extra Classifer Layer: {}\n\
+               Early Stopping at {}\n\
                Save Dir: {}".format(
                    self.model_type, self.opt, self.learning_rate,
                    self.weight_decay, self.patience, self.min_lr, self.batch_size,
                    self.n_classes, self.cls_hid_dim, self.desired_class_samples,
-                   self.extra_cls, save_dir), flush=True)
+                   self.extra_cls, self.early_stopping, save_dir), flush=True)
 
         self.save_dir = save_dir
         self.model_dir = self._format_model_subdir()
