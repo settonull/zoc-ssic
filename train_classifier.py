@@ -14,8 +14,10 @@ if __name__ == '__main__':
     """
 
     ap = ArgumentParser()
-    ap.add_argument("-mt", "--model_type", default='vasic',
+    ap.add_argument("-mt", "--model_type", default='gan',
                     help="Name of model to use.")
+    ap.add_argument("-op", "--optimizer", default='adam',
+                    help="Optimizer to use, 'adam' and 'sgd' supported.")
     ap.add_argument("-nc", "--n_classes", type=int, default=1000,
                     help="Number of classes to predict.")
     ap.add_argument("-bs", "--batch_size", type=int, default=8,
@@ -42,7 +44,9 @@ if __name__ == '__main__':
                     help="Size of classifier hidden layer")
     ap.add_argument("-es", "--early_stop", type=int, default=5,
                     help="number of epochs of no improvement to stop at")
-    ap.add_argument("-sc", "--simple_cls", action='store_true')
+    ap.add_argument("-sc", "--extra_cls", action='store_true')
+    ap.add_argument("-ds", "--desired_samples", type=int, default=-1,
+                    help="Number of samples per class")
 
     args = vars(ap.parse_args())
 
@@ -58,7 +62,9 @@ if __name__ == '__main__':
                      cls_hid_dim = args['classifier_hidden'],
                      eval_pct= args['eval_pct'],
                      early_stopping = args['early_stop'],
-                     simple_cls = args['simple_cls']
+                     extra_cls = args['extra_cls'],
+                     opt  = args['optimizer'],
+                     desired_class_samples=args['desired_samples']
                     )
 
 

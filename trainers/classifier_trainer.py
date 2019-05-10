@@ -23,7 +23,7 @@ class ClassifierTrainer():
     def __init__(self, model_type='basic', n_classes=1000, batch_size=64,
                  learning_rate=3e-5, num_epochs=100, weight_decay=0,
                  patience=10, min_lr=0, eval_pct=0.05, pretrain_weights=None, cls_hid_dim=2048,
-                 remove_previous=True, early_stopping=5, simple_cls=True):
+                 remove_previous=True, early_stopping=5, extra_cls=False, opt='adam', desired_class_samples=-1):
         """
         Initialize Classifier trainer.
 
@@ -47,6 +47,7 @@ class ClassifierTrainer():
         self.remove_previous = remove_previous
         self.last_save_file = None
         self.early_stopping = early_stopping
+        self.opt = opt
 
         # Model attributes
         self.model = None
@@ -57,7 +58,8 @@ class ClassifierTrainer():
         self.save_dir = None
         self.pretrain_weights = pretrain_weights
         self.cls_hid_dim = cls_hid_dim
-        self.simple_cls = simple_cls
+        self.extra_cls = extra_cls
+        self.desired_class_samples = desired_class_samples
 
         # reproducability attributes
         self.torch_rng_state = None
@@ -84,7 +86,7 @@ class ClassifierTrainer():
             if self.pretrain_weights:
                 self.model.encoder.load_state_dict(torch.load(self.pretrain_weights)['state_dict_1'])
         elif self.model_type == 'gan':
-            self.model = GANClassifier(self.n_classes, self.cls_hid_dim, simple_cls=self.simple_cls)
+            self.model = GANClassifier(self.n_classes, self.cls_hid_dim, extra_cls=self.extra_cls)
             if self.pretrain_weights:
                 w = torch.load(self.pretrain_weights)
                 if 'state_dict_2' in w:
@@ -95,11 +97,13 @@ class ClassifierTrainer():
         else:
             raise ValueError("Did not recognize model type!")
 
-        #self.optimizer = Adam(
-        #    self.model.parameters(), lr=self.learning_rate,
-        #    weight_decay=self.weight_decay)
-        self.optimizer = SGD(
-            self.model.parameters(), lr=self.learning_rate)
+        if self.opt == 'adam':
+            self.optimizer = Adam(
+                self.model.parameters(), lr=self.learning_rate,
+                weight_decay=self.weight_decay)
+        elif self.opt == 'SGD':
+            self.optimizer = SGD(
+                self.model.parameters(), lr=self.learning_rate)
 
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, 'max', verbose=True, patience=self.patience,
@@ -225,17 +229,21 @@ class ClassifierTrainer():
         # Print settings to output file
         print("Settings:\n\
                Model Type: {}\n\
-               Classifier hidden: {}\n\
+               Optimizer: {}\n\
                Learning Rate: {}\n\
                Weight Decay: {}\n\
                Patience: {}\n\
                Min LR: {}\n\
                Batch Size: {}\n\
                N Classes: {}\n\
+               Classifier hidden: {}\n\
+               Samples per Classes: {}\n\
+               Extra Classifer Layer: {}\n\
                Save Dir: {}".format(
-                   self.model_type, self.cls_hid_dim, self.learning_rate,
+                   self.model_type, self.opt, self.learning_rate,
                    self.weight_decay, self.patience, self.min_lr, self.batch_size,
-                   self.n_classes, save_dir), flush=True)
+                   self.n_classes, self.cls_hid_dim, self.desired_class_samples,
+                   self.extra_cls, save_dir), flush=True)
 
         self.save_dir = save_dir
         self.model_dir = self._format_model_subdir()
@@ -249,7 +257,7 @@ class ClassifierTrainer():
         best_epoch = 0
 
         train_loader, val_loader = image_loader(data_dir, batch_size=self.batch_size, transform=self.model.transform,
-                                                stype='supervised', eval_pct=self.eval_pct)
+                                                stype='supervised', eval_pct=self.eval_pct, desired_class_samples=self.desired_class_samples)
 
         # train loop
         while self.nn_epoch < self.num_epochs + 1:
