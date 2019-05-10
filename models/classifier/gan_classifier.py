@@ -6,7 +6,7 @@ from models.pretrain.dcgan import Discriminator
 
 class GANClassifier(nn.Module):
 
-    def __init__(self, n_classes=1000, cls_hid_dim=4000):
+    def __init__(self, n_classes=1000, cls_hid_dim=4000, simple_cls=True):
         super(GANClassifier,self).__init__()
 
         # number of discrimiator filters
@@ -23,16 +23,25 @@ class GANClassifier(nn.Module):
         #define the size of the last layer now
         self.ninfeature = ndf * 8 * 4 * 4
 
-        self.final = nn.Sequential(
-            #nn.Linear(self.ninfeature, self.ninfeature),
-            #nn.Dropout(p=0.2),
-            #nn.ReLU(),
-            nn.Linear(self.ninfeature, self.cls_hid_dim ),
-            nn.Dropout(p=0.2),
-            nn.ReLU(),
-            nn.Linear(self.cls_hid_dim , self.n_classes),
-            nn.LogSoftmax(dim=1),
-        )
+        if simple_cls:
+            self.final = nn.Sequential(
+                nn.Linear(self.ninfeature, self.cls_hid_dim ),
+                nn.Dropout(p=0.2),
+                nn.ReLU(),
+                nn.Linear(self.cls_hid_dim , self.n_classes),
+                nn.LogSoftmax(dim=1),
+            )
+        else:
+            self.final = nn.Sequential(
+                nn.Linear(self.ninfeature, self.ninfeature),
+                nn.Dropout(p=0.2),
+                nn.ReLU(),
+                nn.Linear(self.ninfeature, self.cls_hid_dim ),
+                nn.Dropout(p=0.2),
+                nn.ReLU(),
+                nn.Linear(self.cls_hid_dim , self.n_classes),
+                nn.LogSoftmax(dim=1),
+            )
 
     def forward(self, x):
 

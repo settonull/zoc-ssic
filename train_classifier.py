@@ -26,6 +26,8 @@ if __name__ == '__main__':
                     help="Number of epochs for optimization.")
     ap.add_argument("-pt", "--patience", type=int, default=10,
                     help="Number of to wait before reducing learning rate.")
+    ap.add_argument("-ep", "--eval_pct", type=float, default=0.05,
+                    help="amount of Val set to evaluate")
     ap.add_argument("-ml", "--min_lr", type=float, default=0.0,
                     help="Minimum learning rate.")
     ap.add_argument("-td", "--data_path",
@@ -40,6 +42,7 @@ if __name__ == '__main__':
                     help="Size of classifier hidden layer")
     ap.add_argument("-es", "--early_stop", type=int, default=5,
                     help="number of epochs of no improvement to stop at")
+    ap.add_argument("-sc", "--simple_cls", action='store_true')
 
     args = vars(ap.parse_args())
 
@@ -53,7 +56,9 @@ if __name__ == '__main__':
                      min_lr=args['min_lr'],
                      pretrain_weights=args['pretrain_weights'],
                      cls_hid_dim = args['classifier_hidden'],
-                     early_stopping = args['early_stop']
+                     eval_pct= args['eval_pct'],
+                     early_stopping = args['early_stop'],
+                     simple_cls = args['simple_cls']
                     )
 
 

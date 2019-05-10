@@ -5,6 +5,7 @@ from tqdm import tqdm
 
 import torch
 from torch.optim import Adam
+from torch.optim import SGD
 
 from models.classifier.basic_classifier import BasicClassifier
 from models.classifier.basic_ae import BasicAEClassifier
@@ -22,7 +23,7 @@ class ClassifierTrainer():
     def __init__(self, model_type='basic', n_classes=1000, batch_size=64,
                  learning_rate=3e-5, num_epochs=100, weight_decay=0,
                  patience=10, min_lr=0, eval_pct=0.05, pretrain_weights=None, cls_hid_dim=2048,
-                 remove_previous=True, early_stopping=5):
+                 remove_previous=True, early_stopping=5, simple_cls=True):
         """
         Initialize Classifier trainer.
 
@@ -56,6 +57,7 @@ class ClassifierTrainer():
         self.save_dir = None
         self.pretrain_weights = pretrain_weights
         self.cls_hid_dim = cls_hid_dim
+        self.simple_cls = simple_cls
 
         # reproducability attributes
         self.torch_rng_state = None
@@ -82,16 +84,22 @@ class ClassifierTrainer():
             if self.pretrain_weights:
                 self.model.encoder.load_state_dict(torch.load(self.pretrain_weights)['state_dict_1'])
         elif self.model_type == 'gan':
-            self.model = GANClassifier(self.n_classes, self.cls_hid_dim)
+            self.model = GANClassifier(self.n_classes, self.cls_hid_dim, simple_cls=self.simple_cls)
             if self.pretrain_weights:
-                self.model.load_state_dict(torch.load(self.pretrain_weights)['state_dict_2'], strict=False)
+                w = torch.load(self.pretrain_weights)
+                if 'state_dict_2' in w:
+                    self.model.load_state_dict(w['state_dict_2'], strict=False)
+                else:
+                    self.model.load_state_dict(w, strict=False)
 
         else:
             raise ValueError("Did not recognize model type!")
 
-        self.optimizer = Adam(
-            self.model.parameters(), lr=self.learning_rate,
-            weight_decay=self.weight_decay)
+        #self.optimizer = Adam(
+        #    self.model.parameters(), lr=self.learning_rate,
+        #    weight_decay=self.weight_decay)
+        self.optimizer = SGD(
+            self.model.parameters(), lr=self.learning_rate)
 
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, 'max', verbose=True, patience=self.patience,
