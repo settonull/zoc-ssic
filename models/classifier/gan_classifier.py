@@ -46,8 +46,7 @@ class GANClassifier(nn.Module):
     def forward(self, x):
 
         fvector = self.main(x)
-        bs = fvector.shape[0]
-        fvector = fvector.view(bs, self.ninfeature)
+        fvector = fvector.view(-1, self.ninfeature)
         logits = self.final(fvector)
         return (logits)
 
