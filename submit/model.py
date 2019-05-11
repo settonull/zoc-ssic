@@ -49,7 +49,7 @@ class Model(nn.Module):
         # define the size of the last layer now
         self.ninfeature = ndf * 8 * 4 * 4
         self.cls_hid_dim = 2048
-        self.m_classes = 1000
+        self.n_classes = 1000
 
 
         self.final = nn.Sequential(
