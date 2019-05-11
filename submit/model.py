@@ -1,27 +1,67 @@
 import torch
 import torch.nn as nn
 
-from torchvision import models
+class Discriminator(nn.Module):
+    def __init__(self, nc, ndf):
+        super(Discriminator, self).__init__()
+
+        self.main = nn.Sequential(
+            # input is (nc) x 96 x 96
+            nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf) x 48 x 48
+            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*2) x 24 x 24
+            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 4),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*4) x 12 x 12
+            nn.Conv2d(ndf * 4, ndf * 8, 8, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 8),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*8) x 4 x 4
+            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
+            nn.Sigmoid()
+        )
+
+    def forward(self, input):
+        output = self.main(input)
+
+        return output.view(-1, 1).squeeze(1)
 
 
 class Model(nn.Module):
     def __init__(self):
         super(Model, self).__init__()
 
-        self.n_classes = 1000
+        # Architecture
+        # number of discrimiator filters
+        ndf = 64
+        # number of colors
+        nc = 3
 
-        self.main = models.resnet18(pretrained=False)
+        self.main = Discriminator(nc, ndf)
 
-        self.main.fc = nn.Sequential(nn.Linear(512, 128),
-                                     nn.ReLU(),
-                                     nn.Dropout(0.2),
-                                     nn.Linear(128, self.n_classes),
-                                     nn.LogSoftmax(dim=1))
+        # chop off the last two layers
+        self.main = self.main.main[:-2]
+        # define the size of the last layer now
+        self.ninfeature = ndf * 8 * 4 * 4
+        self.cls_hid_dim = 2048
+        self.m_classes = 1000
+
+
+        self.final = nn.Sequential(
+            nn.Linear(self.ninfeature, self.cls_hid_dim),
+            nn.Dropout(p=0.2),
+            nn.ReLU(),
+            nn.Linear(self.cls_hid_dim, self.n_classes),
+            nn.LogSoftmax(dim=1),
+        )
+
         # Load pre-trained model
         self.load_weights('weights.pth')
-
-        #Seems to need this, at least on windows
-        self.main = self.main.to('cuda')
 
     def load_weights(self, pretrained_model_path, cuda=True):
         # Load pretrained model
@@ -45,6 +85,9 @@ class Model(nn.Module):
             else:
                 raise ValueError("state_dict() keys do not match")
 
-
     def forward(self, x):
-        return self.main(x)
+        # TODO
+        fvector = self.main(x)
+        fvector = fvector.view(-1, self.ninfeature)
+        logits = self.final(fvector)
+        return (logits)
